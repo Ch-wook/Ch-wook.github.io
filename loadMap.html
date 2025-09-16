@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>김영한 로드맵 학습 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 0.5rem;
+            text-align: center;
+        }
+        .day-header {
+            font-weight: 700;
+            padding: 0.5rem;
+        }
+        .calendar-day {
+            padding: 0.5rem;
+            height: 120px;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            background-color: #fff;
+            position: relative;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            font-weight: 500;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .calendar-day.today {
+            border: 2px solid #3b82f6;
+        }
+        .calendar-day:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .day-info-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            padding-top: 0.25rem;
+            flex-grow: 1;
+            justify-content: center;
+        }
+        .day-info-container p {
+            font-size: 0.75rem;
+            line-height: 1.2;
+            text-align: center;
+        }
+        .course-name {
+            font-weight: 700;
+            color: #4338ca; /* indigo-700 */
+        }
+        .course-remaining-hours {
+            color: #64748b; /* slate-500 */
+            font-weight: 500;
+        }
+        .completed-course {
+            font-weight: 700;
+            color: #16a34a; /* green-600 */
+            background-color: #dcfce7;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield; /* Firefox */
+        }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">김영한님 로드맵 학습 대시보드</h1>
+            <p class="text-slate-600 mt-2">학습 시간을 입력하여 진행 상황을 추적하고 시각화하세요.</p>
+        </header>
+
+        <main>
+            <!-- 캘린더 섹션 -->
+            <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="calendar-title" class="text-xl font-bold text-slate-900"></h2>
+                    <div class="flex space-x-2">
+                        <button id="prev-month" class="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button id="next-month" class="p-2 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="calendar-grid text-sm mb-4">
+                    <div class="day-header text-red-500">일</div>
+                    <div class="day-header">월</div>
+                    <div class="day-header">화</div>
+                    <div class="day-header">수</div>
+                    <div class="day-header">목</div>
+                    <div class="day-header">금</div>
+                    <div class="day-header">토</div>
+                </div>
+                <div id="calendar-days" class="calendar-grid">
+                </div>
+            </div>
+
+            <!-- 요약 정보 섹션 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-sky-100 text-sky-700 p-3 rounded-full mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">총 학습 시간</p>
+                    <p id="total-hours-display" class="text-2xl font-bold mt-1">0시간</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-emerald-100 text-emerald-700 p-3 rounded-full mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">시작일</p>
+                    <p id="start-date" class="text-2xl font-bold mt-1">0000-00-00</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-amber-100 text-amber-700 p-3 rounded-full mb-2">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">예상 완강일</p>
+                    <p id="estimated-completion-date" class="text-2xl font-bold mt-1">0000-00-00</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-indigo-100 text-indigo-700 p-3 rounded-full mb-2">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 text-sm">남은 강의 수</p>
+                        <p id="remaining-courses" class="text-2xl font-bold">0개</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-purple-100 text-purple-700 p-3 rounded-full mb-2">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">총 완강까지 남은 시간</p>
+                    <p id="total-remaining-hours" class="text-2xl font-bold mt-1">0시간</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                    <div class="bg-cyan-100 text-cyan-700 p-3 rounded-full mb-2">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">전체 로드맵 시간</p>
+                    <p id="roadmap-total-hours" class="text-2xl font-bold mt-1">0시간</p>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center mt-12 text-slate-500">
+            <p>이 대시보드는 제공된 학습 계획표를 기반으로 생성되었습니다.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const courseData = [
+                { name: '실전 자바 - 중급 2편', shortName: '중급 2편', hours: 19.4 },
+                { name: '실전 자바 - 고급 1편', shortName: '고급 1편', hours: 20.8 },
+                { name: '실전 자바 - 고급 2편', shortName: '고급 2편', hours: 21.6 },
+                { name: '실전 자바 - 고급 3편', shortName: '고급 3편', hours: 16.7 },
+                { name: '스프링 입문', shortName: '스프링 입문', hours: 5.7 },
+                { name: '스프링 핵심 원리 - 기본편', shortName: '핵심 기본', hours: 12.1 },
+                { name: 'HTTP 웹 기본 지식', shortName: 'HTTP 기본', hours: 5.4 },
+                { name: '스프링 MVC 1편', shortName: 'MVC 1편', hours: 15.4 },
+                { name: '스프링 MVC 2편', shortName: 'MVC 2편', hours: 21.1 },
+                { name: '스프링 DB 1편', shortName: 'DB 1편', hours: 10.1 },
+                { name: '스프링 DB 2편', shortName: 'DB 2편', hours: 14.0 },
+                { name: '실전! 스프링 부트와 JPA 활용1', shortName: '부트 JPA1', hours: 7.7 },
+                { name: '자바 ORM 표준 JPA 프로그래밍 - 기본편', shortName: 'JPA 기본', hours: 16.1 },
+                { name: '자바 ORM 표준 JPA 프로그래밍', shortName: 'JPA 프로그래밍', hours: 6.6 },
+                { name: '실전! 스프링 부트와 JPA 활용2', shortName: '부트 JPA2', hours: 7.3 },
+                { name: '실전! 스프링 데이터 JPA', shortName: '데이터 JPA', hours: 6.4 },
+                { name: '실전! Querydsl', shortName: 'Querydsl', hours: 16.7 },
+                { name: '스프링 핵심 원리 - 고급편', shortName: '핵심 고급', hours: 15.8 },
+                { name: '스프링 부트 - 핵심 원리와 활용', shortName: '부트 핵심', hours: 8.6 },
+                { name: '실전 데이터베이스 입문', shortName: 'DB 입문', hours: 13.7 },
+                { name: '실전 데이터베이스 - 기본편', shortName: 'DB 기본', hours: 13.7 }
+            ];
+            
+            const totalRoadmapHours = courseData.reduce((sum, course) => sum + course.hours, 0);
+            const totalCourses = courseData.length;
+            
+            const calendarDaysContainer = document.getElementById('calendar-days');
+            const calendarTitle = document.getElementById('calendar-title');
+            const prevMonthBtn = document.getElementById('prev-month');
+            const nextMonthBtn = document.getElementById('next-month');
+            const estimatedCompletionDateEl = document.getElementById('estimated-completion-date');
+            const remainingCoursesDisplay = document.getElementById('remaining-courses');
+            const totalHoursDisplay = document.getElementById('total-hours-display');
+            const totalRemainingHoursDisplay = document.getElementById('total-remaining-hours');
+            const roadmapTotalHoursDisplay = document.getElementById('roadmap-total-hours');
+
+            let today = new Date();
+            let currentMonth = today.getMonth();
+            let currentYear = today.getFullYear();
+            
+            // 시작일이 localStorage에 없으면 오늘 날짜로 설정하고 저장
+            if (!localStorage.getItem('startDate')) {
+                localStorage.setItem('startDate', today.toISOString().split('T')[0]);
+            }
+            const startDateStr = localStorage.getItem('startDate');
+            document.getElementById('start-date').textContent = startDateStr;
+            
+            roadmapTotalHoursDisplay.textContent = `${totalRoadmapHours.toFixed(1)}시간`;
+
+            /**
+             * 특정 날짜까지의 누적 학습 시간을 계산합니다.
+             * @param {Date} untilDate - 계산 기준 날짜
+             * @returns {number} - 누적 학습 시간
+             */
+            function getCompletedHoursSum(untilDate) {
+                let sum = 0;
+                const untilTimestamp = untilDate.valueOf();
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('hours-')) {
+                        const storedDate = new Date(key.replace('hours-', ''));
+                        if (storedDate.valueOf() <= untilTimestamp) {
+                            sum += parseFloat(localStorage.getItem(key));
+                        }
+                    }
+                }
+                return sum;
+            }
+
+            /**
+             * 누적 학습 시간을 기준으로 남은 강좌 수를 계산합니다.
+             * @param {number} completedHours - 누적 학습 시간
+             * @returns {{completedCount: number}} - 완료된 강좌 수
+             */
+            function getRemainingCourseInfo(completedHours) {
+                let cumulativeHours = 0;
+                let completedCount = 0;
+                for (const course of courseData) {
+                    cumulativeHours += course.hours;
+                    if (completedHours >= cumulativeHours) {
+                        completedCount++;
+                    } else {
+                        break;
+                    }
+                }
+                return { completedCount: completedCount };
+            }
+            
+            /**
+             * 요약 정보 카드들의 내용을 업데이트합니다.
+             */
+            function updateSummary() {
+                const completedHours = getCompletedHoursSum(new Date());
+                const remainingTotalHours = totalRoadmapHours - completedHours;
+                
+                totalHoursDisplay.textContent = `${completedHours.toFixed(1)}시간`;
+                
+                const { completedCount } = getRemainingCourseInfo(completedHours);
+                remainingCoursesDisplay.textContent = `${totalCourses - completedCount}개`;
+
+                const startDate = new Date(localStorage.getItem('startDate'));
+                let futureDate = new Date(startDate);
+                let futureHours = 0;
+
+                while(futureHours < remainingTotalHours) {
+                    const dateStr = `${futureDate.getFullYear()}-${(futureDate.getMonth() + 1).toString().padStart(2, '0')}-${futureDate.getDate().toString().padStart(2, '0')}`;
+                    const dailyHours = parseFloat(localStorage.getItem(`hours-${dateStr}`)) || (futureDate.getDay() === 0 ? 0 : 1);
+                    futureHours += dailyHours;
+                    futureDate.setDate(futureDate.getDate() + 1);
+                }
+                
+                let completionDateText = remainingTotalHours <= 0 ? '완료!' : `${futureDate.getFullYear()}-${(futureDate.getMonth() + 1).toString().padStart(2, '0')}-${(futureDate.getDate() - 1).toString().padStart(2, '0')}`;
+                estimatedCompletionDateEl.textContent = completionDateText;
+
+                totalRemainingHoursDisplay.textContent = `${Math.max(0, remainingTotalHours).toFixed(1)}시간`;
+            }
+
+            /**
+             * 달력 UI를 렌더링합니다.
+             * @param {number} month - 월 (0-11)
+             * @param {number} year - 년도
+             */
+            function renderCalendar(month, year) {
+                calendarDaysContainer.innerHTML = '';
+                calendarTitle.textContent = `${year}년 ${month + 1}월`;
+
+                const firstDayOfMonth = new Date(year, month, 1);
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const startingDayOfWeek = firstDayOfMonth.getDay();
+                
+                for (let i = 0; i < startingDayOfWeek; i++) {
+                    const emptyCell = document.createElement('div');
+                    calendarDaysContainer.appendChild(emptyCell);
+                }
+                
+                let cumulativeHoursUntilThisMonth = getCompletedHoursSum(new Date(year, month, 0));
+                
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                    const isSunday = date.getDay() === 0;
+                    const storedHours = parseFloat(localStorage.getItem(`hours-${dateStr}`));
+                    const inputValue = storedHours !== null && !isNaN(storedHours) ? storedHours : (isSunday ? 0 : 1);
+                    const isToday = date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+                    
+                    const cell = document.createElement('div');
+                    cell.className = `calendar-day ${isToday ? 'today' : ''}`;
+                    
+                    const todayCumulativeHours = cumulativeHoursUntilThisMonth + inputValue;
+                    const yesterdayCumulativeHours = cumulativeHoursUntilThisMonth;
+                    
+                    let currentCourse = null;
+                    let remainingHours = 0;
+                    let completedCourseName = null;
+                    
+                    let tempCumulativeHours = 0;
+                    for (let i = 0; i < courseData.length; i++) {
+                        const course = courseData[i];
+                        const courseEndHours = tempCumulativeHours + course.hours;
+                        
+                        if (yesterdayCumulativeHours < courseEndHours && todayCumulativeHours >= courseEndHours) {
+                            completedCourseName = course.name;
+                        }
+
+                        if (todayCumulativeHours < courseEndHours) {
+                            currentCourse = course;
+                            remainingHours = courseEndHours - todayCumulativeHours;
+                            break;
+                        }
+                        
+                        tempCumulativeHours += course.hours;
+                    }
+
+                    let dayContent = `
+                        <div class="flex-grow flex flex-col justify-between">
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="font-bold text-sm">${day}</div>
+                                <input type="number" step="0.1" class="w-12 text-right text-xs text-slate-500 bg-transparent outline-none" 
+                                    value="${inputValue}" data-date="${dateStr}" min="0">
+                            </div>
+                            <div class="day-info-container">
+                    `;
+                    
+                    if (completedCourseName) {
+                         dayContent += `<p class="completed-course mb-2">완강!</p>`;
+                    }
+                    if (currentCourse) {
+                         dayContent += `<p class="course-name">${currentCourse.shortName}</p>`;
+                         dayContent += `<p class="course-remaining-hours">${remainingHours.toFixed(1)}시간 남음</p>`;
+                    }
+                    
+                    dayContent += `
+                            </div>
+                        </div>
+                    `;
+
+                    cell.innerHTML = dayContent;
+                    calendarDaysContainer.appendChild(cell);
+
+                    cumulativeHoursUntilThisMonth += inputValue;
+                }
+
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.addEventListener('change', (e) => {
+                        const dateStr = e.target.dataset.date;
+                        const hours = parseFloat(e.target.value) || 0;
+                        localStorage.setItem(`hours-${dateStr}`, hours);
+                        updateSummary();
+                        renderCalendar(currentMonth, currentYear);
+                    });
+                });
+            }
+
+
+            prevMonthBtn.addEventListener('click', () => {
+                currentMonth--;
+                if (currentMonth < 0) {
+                    currentMonth = 11;
+                    currentYear--;
+                }
+                renderCalendar(currentMonth, currentYear);
+            });
+
+            nextMonthBtn.addEventListener('click', () => {
+                currentMonth++;
+                if (currentMonth > 11) {
+                    currentMonth = 0;
+                    currentYear++;
+                }
+                renderCalendar(currentMonth, currentYear);
+            });
+
+            // 초기 실행
+            updateSummary();
+            renderCalendar(currentMonth, currentYear);
+        });
+    </script>
+</body>
+</html>
