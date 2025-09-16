@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카테고리 메모장</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .note-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .note-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .note-input {
+            resize: none;
+        }
+        .category-item {
+            transition: background-color 0.2s;
+        }
+        .category-item.selected {
+            background-color: #e2e8f0;
+            font-weight: 700;
+        }
+        .message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            border-radius: 9999px;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 1000;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="container mx-auto max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">카테고리 메모장</h1>
+            <p class="text-gray-500 mt-2">어디서든 동기화되는 나만의 메모장</p>
+        </header>
+
+        <main class="md:flex gap-8">
+            <!-- 좌측 사이드바 (오늘의 할 일 및 카테고리) -->
+            <div class="w-full md:w-1/4 mb-8 md:mb-0 h-fit md:sticky md:top-8 space-y-4">
+                <!-- 오늘의 할 일 목록 -->
+                <div id="today-tasks-container" class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">오늘의 할 일</h3>
+                    <ul id="today-tasks-list" class="space-y-2">
+                        <!-- 오늘 할 일 메모가 여기에 동적으로 추가됩니다 -->
+                    </ul>
+                </div>
+                <!-- 카테고리 관리 섹션 -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">카테고리</h3>
+                    <div class="flex space-x-2 mb-4">
+                        <input type="text" id="category-input" class="w-full p-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="새 카테고리명">
+                        <button id="add-category-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors shrink-0">추가</button>
+                    </div>
+                    <ul id="category-list" class="space-y-2">
+                        <!-- 카테고리 목록이 여기에 동적으로 추가됩니다 -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 메모 입력 및 목록 섹션 (우측) -->
+            <div class="w-full md:w-3/4">
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <textarea id="note-input" class="note-input w-full p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700" rows="5" placeholder="여기에 메모를 입력하세요..."></textarea>
+                    <div class="flex justify-end mt-4 space-x-2">
+                        <button id="add-note-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-full hover:bg-blue-700 transition-colors duration-300">메모 추가</button>
+                    </div>
+                </div>
+                
+                <div id="notes-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 메모가 여기에 동적으로 추가됩니다 -->
+                </div>
+            </div>
+        </main>
+
+        <!-- 메모 삭제 확인 모달 -->
+        <div id="delete-note-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-80">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">메모 삭제</h3>
+                <p class="text-sm text-gray-600 mb-6">정말로 이 메모를 삭제하시겠습니까?</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-note-delete" class="bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-full hover:bg-gray-300 transition-colors">취소</button>
+                    <button id="confirm-note-delete" class="bg-red-500 text-white font-medium py-2 px-4 rounded-full hover:bg-red-600 transition-colors">삭제</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 카테고리 삭제 확인 모달 -->
+        <div id="delete-category-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-96">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">카테고리 삭제</h3>
+                <p class="text-sm text-gray-600 mb-6">정말로 '<span id="category-to-delete-name" class="font-bold"></span>' 카테고리를 삭제하시겠습니까? <br> 이 카테고리에 포함된 모든 메모도 함께 삭제됩니다.</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-category-delete" class="bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-full hover:bg-gray-300 transition-colors">취소</button>
+                    <button id="confirm-category-delete" class="bg-red-500 text-white font-medium py-2 px-4 rounded-full hover:bg-red-600 transition-colors">삭제</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module">
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot, addDoc, doc, deleteDoc, setDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase 설정 (환경 변수 사용)
+        setLogLevel('Debug');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let userId = null;
+        let selectedCategory = localStorage.getItem('selectedCategory') || '오늘 할 일';
+        
+        // 데이터 상태를 관리할 전역 변수
+        let allNotes = [];
+        let allCategories = [];
+        
+        // 삭제할 대상의 ID/이름을 저장하는 변수
+        let noteToDeleteId = null;
+        let categoryToDeleteName = null;
+
+        // 메시지 박스 함수
+        const showMessage = (message, type = 'info') => {
+            const messageBox = document.createElement('div');
+            messageBox.className = `message-box ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            messageBox.textContent = message;
+            document.body.appendChild(messageBox);
+
+            setTimeout(() => {
+                messageBox.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+                messageBox.addEventListener('transitionend', () => messageBox.remove(), { once: true });
+            }, 3000);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 주요 DOM 요소 가져오기
+            const noteInput = document.getElementById('note-input');
+            const addNoteBtn = document.getElementById('add-note-btn');
+            const notesContainer = document.getElementById('notes-container');
+            const categoryInput = document.getElementById('category-input');
+            const addCategoryBtn = document.getElementById('add-category-btn');
+            const categoryList = document.getElementById('category-list');
+            const todayTasksList = document.getElementById('today-tasks-list');
+            
+            // 모달 관련 DOM 요소
+            const deleteNoteModal = document.getElementById('delete-note-modal');
+            const confirmNoteDeleteBtn = document.getElementById('confirm-note-delete');
+            const cancelNoteDeleteBtn = document.getElementById('cancel-note-delete');
+            const deleteCategoryModal = document.getElementById('delete-category-modal');
+            const confirmCategoryDeleteBtn = document.getElementById('confirm-category-delete');
+            const cancelCategoryDeleteBtn = document.getElementById('cancel-category-delete');
+            const categoryToDeleteSpan = document.getElementById('category-to-delete-name');
+            
+            // 로그인 상태 변경 리스너
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("User is authenticated:", userId);
+                    initializeDataListeners();
+                } else {
+                    console.log("No user, trying to sign in...");
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                        showMessage("로그인에 실패했습니다.", 'error');
+                    }
+                }
+            });
+
+            // 데이터 리스너 초기화 함수
+            const initializeDataListeners = () => {
+                if (!userId) return;
+
+                // Notes 리스너
+                const qNotes = query(collection(db, `/artifacts/${appId}/users/${userId}/notes`));
+                onSnapshot(qNotes, (querySnapshot) => {
+                    const notes = [];
+                    querySnapshot.forEach((doc) => {
+                        notes.push({ id: doc.id, ...doc.data() });
+                    });
+                    allNotes = notes; // 전역 상태 업데이트
+                    renderNotes(); // 메모 렌더링
+                    renderTodayTasks(); // '오늘의 할 일' 렌더링
+                });
+
+                // Categories 리스너
+                const qCategories = query(collection(db, `/artifacts/${appId}/users/${userId}/categories`));
+                onSnapshot(qCategories, (querySnapshot) => {
+                    const categories = ['오늘 할 일', '전체'];
+                    querySnapshot.forEach((doc) => {
+                        if (doc.data().name) {
+                            categories.push(doc.data().name);
+                        }
+                    });
+                    allCategories = [...new Set(categories)]; // 중복 제거 후 전역 상태 업데이트
+                    renderCategories(); // 카테고리 렌더링
+                });
+            };
+
+            // '오늘의 할 일' 메모 렌더링 함수
+            const renderTodayTasks = () => {
+                todayTasksList.innerHTML = '';
+                const todayNotes = allNotes.filter(note => note.category === '오늘 할 일');
+                
+                if (todayNotes.length === 0) {
+                    const emptyItem = document.createElement('li');
+                    emptyItem.className = 'text-gray-400 text-sm';
+                    emptyItem.textContent = '오늘 할 일이 없습니다.';
+                    todayTasksList.appendChild(emptyItem);
+                } else {
+                    todayNotes.forEach(note => {
+                        const taskItem = document.createElement('li');
+                        taskItem.className = 'text-gray-700 text-sm p-1 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-default';
+                        taskItem.textContent = note.content.length > 30 ? note.content.substring(0, 30) + '...' : note.content;
+                        todayTasksList.appendChild(taskItem);
+                    });
+                }
+            };
+
+            // 카테고리 렌더링 함수
+            const renderCategories = () => {
+                categoryList.innerHTML = '';
+                allCategories.forEach(category => {
+                    const categoryItem = document.createElement('li');
+                    categoryItem.className = `category-item p-2 rounded-lg cursor-pointer hover:bg-gray-200 flex justify-between items-center ${selectedCategory === category ? 'selected' : ''}`;
+                    categoryItem.dataset.category = category;
+                    
+                    const span = document.createElement('span');
+                    span.textContent = category;
+                    categoryItem.appendChild(span);
+
+                    if (category !== '전체' && category !== '오늘 할 일') {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'delete-category-btn text-gray-400 hover:text-red-500';
+                        deleteBtn.dataset.category = category;
+                        deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>`;
+                        
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            categoryToDeleteName = e.currentTarget.dataset.category;
+                            categoryToDeleteSpan.textContent = categoryToDeleteName;
+                            deleteCategoryModal.classList.remove('hidden');
+                        });
+                        categoryItem.appendChild(deleteBtn);
+                    }
+                    
+                    categoryItem.addEventListener('click', () => {
+                        selectedCategory = category;
+                        localStorage.setItem('selectedCategory', selectedCategory);
+                        renderCategories(); // 카테고리 목록 다시 그려서 선택 스타일 적용
+                        renderNotes(); // **메모 목록을 다시 그려서 필터링 적용**
+                    });
+                    
+                    categoryList.appendChild(categoryItem);
+                });
+            };
+
+            // 메모 렌더링 함수
+            const renderNotes = () => {
+                notesContainer.innerHTML = '';
+                const filteredNotes = selectedCategory === '전체'
+                    ? allNotes
+                    : allNotes.filter(note => note.category === selectedCategory);
+
+                if (filteredNotes.length === 0) {
+                    const emptyMessage = document.createElement('div');
+                    emptyMessage.className = 'col-span-1 sm:col-span-2 lg:col-span-3 text-center text-gray-400 mt-8';
+                    emptyMessage.textContent = selectedCategory === '전체' ? '아직 작성된 메모가 없습니다.' : `"${selectedCategory}" 카테고리에 메모가 없습니다.`;
+                    notesContainer.appendChild(emptyMessage);
+                    return;
+                }
+
+                filteredNotes.forEach(note => {
+                    const noteCard = document.createElement('div');
+                    noteCard.className = 'note-card bg-white rounded-xl shadow-md p-6 relative';
+                    noteCard.innerHTML = `
+                        <p class="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">${note.content}</p>
+                        <button class="delete-note-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" /></svg>
+                        </button>
+                    `;
+                    notesContainer.appendChild(noteCard);
+
+                    noteCard.querySelector('.delete-note-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        noteToDeleteId = note.id;
+                        deleteNoteModal.classList.remove('hidden');
+                    });
+                });
+            };
+
+            // 메모 추가
+            addNoteBtn.addEventListener('click', async () => {
+                const content = noteInput.value.trim();
+                if (content && userId) {
+                    try {
+                        await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/notes`), {
+                            content: content,
+                            category: (selectedCategory === '전체' || !selectedCategory) ? '오늘 할 일' : selectedCategory,
+                            createdAt: new Date()
+                        });
+                        noteInput.value = '';
+                        showMessage('메모가 추가되었습니다.', 'info');
+                    } catch (e) {
+                        console.error("Error adding note: ", e);
+                        showMessage('메모 추가 실패', 'error');
+                    }
+                }
+            });
+
+            // 카테고리 추가
+            addCategoryBtn.addEventListener('click', async () => {
+                const categoryName = categoryInput.value.trim();
+                if (categoryName && userId) {
+                    if (['오늘 할 일', '전체'].includes(categoryName)) {
+                        showMessage('사용할 수 없는 카테고리 이름입니다.', 'error');
+                        return;
+                    }
+                    try {
+                        const categoryDocRef = doc(db, `/artifacts/${appId}/users/${userId}/categories`, categoryName);
+                        await setDoc(categoryDocRef, { name: categoryName });
+                        categoryInput.value = '';
+                        showMessage(`'${categoryName}' 카테고리가 추가되었습니다.`, 'info');
+                    } catch (e) {
+                        console.error("Error adding category: ", e);
+                        showMessage('카테고리 추가 실패', 'error');
+                    }
+                }
+            });
+            
+            // --- 모달 이벤트 리스너 ---
+
+            // 메모 삭제 모달
+            confirmNoteDeleteBtn.addEventListener('click', async () => {
+                if (noteToDeleteId && userId) {
+                    try {
+                        await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/notes`, noteToDeleteId));
+                        showMessage('메모가 삭제되었습니다.', 'info');
+                    } catch (e) {
+                        console.error("Error deleting note: ", e);
+                        showMessage('메모 삭제 실패', 'error');
+                    } finally {
+                        noteToDeleteId = null;
+                        deleteNoteModal.classList.add('hidden');
+                    }
+                }
+            });
+            cancelNoteDeleteBtn.addEventListener('click', () => {
+                noteToDeleteId = null;
+                deleteNoteModal.classList.add('hidden');
+            });
+            
+            // 카테고리 삭제 모달
+            confirmCategoryDeleteBtn.addEventListener('click', async () => {
+                if (categoryToDeleteName && userId) {
+                    try {
+                        // 1. 카테고리에 속한 모든 메모 삭제
+                        const notesQuery = query(collection(db, `/artifacts/${appId}/users/${userId}/notes`), where("category", "==", categoryToDeleteName));
+                        const querySnapshot = await getDocs(notesQuery);
+                        const batch = writeBatch(db);
+                        querySnapshot.forEach((doc) => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+
+                        // 2. 카테고리 자체 삭제
+                        await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/categories`, categoryToDeleteName));
+                        
+                        showMessage(`'${categoryToDeleteName}' 카테고리가 삭제되었습니다.`, 'info');
+                        
+                        // 현재 선택된 카테고리가 삭제된 경우 '전체'로 변경
+                        if (selectedCategory === categoryToDeleteName) {
+                            selectedCategory = '전체';
+                            localStorage.setItem('selectedCategory', selectedCategory);
+                        }
+
+                    } catch (e) {
+                        console.error("카테고리 삭제 중 오류 발생:", e);
+                        showMessage("카테고리 삭제 실패", 'error');
+                    } finally {
+                        categoryToDeleteName = null;
+                        deleteCategoryModal.classList.add('hidden');
+                    }
+                }
+            });
+            cancelCategoryDeleteBtn.addEventListener('click', () => {
+                categoryToDeleteName = null;
+                deleteCategoryModal.classList.add('hidden');
+            });
+        });
+    </script>
+</body>
+</html>
