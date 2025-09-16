@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카테고리 메모장</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .note-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .note-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .note-input {
+            resize: none;
+        }
+        .category-item {
+            transition: background-color 0.2s;
+        }
+        .category-item.selected {
+            background-color: #e2e8f0;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="container mx-auto max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">카테고리 메모장</h1>
+            <p class="text-gray-500 mt-2">오늘의 할 일이나 아이디어를 분류하여 기록해보세요.</p>
+        </header>
+
+        <!-- 오늘 할 일 목록 (새로운 섹션) -->
+        <div id="today-tasks-container" class="bg-white rounded-xl shadow-lg p-4 mb-8">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">오늘의 할 일</h3>
+            <ul id="today-tasks-list" class="space-y-2">
+                <!-- 오늘 할 일 메모가 여기에 동적으로 추가됩니다 -->
+            </ul>
+        </div>
+
+        <main class="md:flex gap-8">
+            <!-- 카테고리 관리 섹션 (좌측) -->
+            <div class="w-full md:w-1/4 bg-white rounded-xl shadow-lg p-6 mb-8 md:mb-0 h-fit md:sticky md:top-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">카테고리</h3>
+                <div class="flex space-x-2 mb-4">
+                    <input type="text" id="category-input" class="w-full p-2 border border-gray-200 rounded-lg text-sm" placeholder="새 카테고리명">
+                    <button id="add-category-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">추가</button>
+                </div>
+                <ul id="category-list" class="space-y-2">
+                    <!-- 카테고리 목록이 여기에 동적으로 추가됩니다 -->
+                </ul>
+            </div>
+
+            <!-- 메모 입력 및 목록 섹션 (우측) -->
+            <div class="w-full md:w-3/4">
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <textarea id="note-input" class="note-input w-full p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700" rows="5" placeholder="여기에 메모를 입력하세요..."></textarea>
+                    <div class="flex justify-end mt-4 space-x-2">
+                        <button id="add-note-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-full hover:bg-blue-700 transition-colors duration-300">메모 추가</button>
+                    </div>
+                </div>
+                
+                <div id="notes-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 메모가 여기에 동적으로 추가됩니다 -->
+                </div>
+            </div>
+        </main>
+
+        <!-- 삭제 확인 모달 -->
+        <div id="delete-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-80">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">메모 삭제</h3>
+                <p class="text-sm text-gray-600 mb-6">정말로 이 메모를 삭제하시겠습니까?</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-delete" class="bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-full hover:bg-gray-300 transition-colors">취소</button>
+                    <button id="confirm-delete" class="bg-red-500 text-white font-medium py-2 px-4 rounded-full hover:bg-red-600 transition-colors">삭제</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const noteInput = document.getElementById('note-input');
+            const addNoteBtn = document.getElementById('add-note-btn');
+            const notesContainer = document.getElementById('notes-container');
+            const deleteModal = document.getElementById('delete-modal');
+            const confirmDeleteBtn = document.getElementById('confirm-delete');
+            const cancelDeleteBtn = document.getElementById('cancel-delete');
+            const categoryInput = document.getElementById('category-input');
+            const addCategoryBtn = document.getElementById('add-category-btn');
+            const categoryList = document.getElementById('category-list');
+            const todayTasksList = document.getElementById('today-tasks-list');
+
+            let notes = JSON.parse(localStorage.getItem('notes')) || [];
+            let categories = JSON.parse(localStorage.getItem('categories')) || ['전체'];
+            // '오늘 할 일' 카테고리가 없으면 추가하고 맨 앞으로 이동
+            if (!categories.includes('오늘 할 일')) {
+                const todayIndex = categories.indexOf('오늘 할 일');
+                if (todayIndex > -1) {
+                    categories.splice(todayIndex, 1);
+                }
+                categories.unshift('오늘 할 일');
+                localStorage.setItem('categories', JSON.stringify(categories));
+            }
+            let selectedCategory = localStorage.getItem('selectedCategory') || '오늘 할 일';
+            let noteToDeleteId = null;
+
+            // '오늘 할 일' 메모 렌더링 함수
+            const renderTodayTasks = () => {
+                todayTasksList.innerHTML = '';
+                const todayNotes = notes.filter(note => note.category === '오늘 할 일');
+                
+                if (todayNotes.length === 0) {
+                    const emptyItem = document.createElement('li');
+                    emptyItem.className = 'text-gray-400 text-sm';
+                    emptyItem.textContent = '오늘 할 일이 없습니다.';
+                    todayTasksList.appendChild(emptyItem);
+                } else {
+                    todayNotes.forEach(note => {
+                        const taskItem = document.createElement('li');
+                        taskItem.className = 'text-gray-700 text-sm p-1 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer';
+                        taskItem.textContent = note.content;
+                        todayTasksList.appendChild(taskItem);
+                    });
+                }
+            };
+
+            // 카테고리 렌더링 함수
+            const renderCategories = () => {
+                categoryList.innerHTML = '';
+                categories.forEach(category => {
+                    const categoryItem = document.createElement('li');
+                    categoryItem.className = `category-item p-2 rounded-lg cursor-pointer hover:bg-gray-200 ${selectedCategory === category ? 'selected' : ''}`;
+                    categoryItem.textContent = category;
+                    categoryItem.dataset.category = category;
+                    categoryList.appendChild(categoryItem);
+                });
+
+                // 카테고리 클릭 이벤트 리스너
+                document.querySelectorAll('.category-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        selectedCategory = e.target.dataset.category;
+                        localStorage.setItem('selectedCategory', selectedCategory);
+                        renderCategories();
+                        renderNotes();
+                    });
+                });
+            };
+
+            // 메모 렌더링 함수
+            const renderNotes = () => {
+                notesContainer.innerHTML = '';
+                // 선택된 카테고리에 따라 메모 필터링
+                const filteredNotes = selectedCategory === '전체' 
+                    ? notes 
+                    : notes.filter(note => note.category === selectedCategory);
+
+                if (filteredNotes.length === 0) {
+                    const emptyMessage = document.createElement('div');
+                    emptyMessage.className = 'col-span-1 md:col-span-2 lg:col-span-3 text-center text-gray-400 mt-8';
+                    emptyMessage.textContent = selectedCategory === '전체' ? '아직 작성된 메모가 없습니다.' : `"${selectedCategory}" 카테고리에 메모가 없습니다.`;
+                    notesContainer.appendChild(emptyMessage);
+                    return;
+                }
+
+                filteredNotes.forEach(note => {
+                    const noteCard = document.createElement('div');
+                    noteCard.className = 'note-card bg-white rounded-xl shadow-md p-6 relative';
+                    noteCard.dataset.id = note.id;
+
+                    const noteContent = document.createElement('div');
+                    noteContent.className = 'text-gray-700 text-sm leading-relaxed whitespace-pre-wrap';
+                    noteContent.textContent = note.content;
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors';
+                    deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm6 0a1 1 0 11-2 0v6a1 1 0 112 0V8z" clip-rule="evenodd" /></svg>';
+                    
+                    noteCard.appendChild(noteContent);
+                    noteCard.appendChild(deleteBtn);
+                    notesContainer.appendChild(noteCard);
+
+                    // 삭제 버튼 이벤트 리스너
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        noteToDeleteId = note.id;
+                        deleteModal.classList.remove('hidden');
+                    });
+                });
+            };
+
+            // 메모 추가 버튼 클릭 이벤트
+            addNoteBtn.addEventListener('click', () => {
+                const content = noteInput.value.trim();
+                if (content) {
+                    const newNote = {
+                        id: Date.now(),
+                        content: content,
+                        category: selectedCategory // 현재 선택된 카테고리 할당
+                    };
+                    notes.unshift(newNote);
+                    localStorage.setItem('notes', JSON.stringify(notes));
+                    noteInput.value = '';
+                    renderNotes();
+                    renderTodayTasks(); // '오늘 할 일' 목록 업데이트
+                }
+            });
+
+            // 카테고리 추가 버튼 클릭 이벤트
+            addCategoryBtn.addEventListener('click', () => {
+                const categoryName = categoryInput.value.trim();
+                if (categoryName && !categories.includes(categoryName)) {
+                    categories.push(categoryName);
+                    localStorage.setItem('categories', JSON.stringify(categories));
+                    categoryInput.value = '';
+                    renderCategories();
+                }
+            });
+
+            // 삭제 모달 확인 버튼 이벤트
+            confirmDeleteBtn.addEventListener('click', () => {
+                if (noteToDeleteId !== null) {
+                    notes = notes.filter(note => note.id !== noteToDeleteId);
+                    localStorage.setItem('notes', JSON.stringify(notes));
+                    noteToDeleteId = null;
+                    deleteModal.classList.add('hidden');
+                    renderNotes();
+                    renderTodayTasks(); // '오늘 할 일' 목록 업데이트
+                }
+            });
+
+            // 삭제 모달 취소 버튼 이벤트
+            cancelDeleteBtn.addEventListener('click', () => {
+                noteToDeleteId = null;
+                deleteModal.classList.add('hidden');
+            });
+
+            // 초기 렌더링
+            renderCategories();
+            renderNotes();
+            renderTodayTasks();
+        });
+    </script>
+</body>
+</html>
