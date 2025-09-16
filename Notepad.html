@@ -37,28 +37,30 @@
     <div class="container mx-auto max-w-6xl">
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-800">카테고리 메모장</h1>
-            <p class="text-gray-500 mt-2">오늘의 할 일이나 아이디어를 분류하여 기록해보세요.</p>
+            <p class="text-gray-500 mt-2">어디서든 동기화되는 나만의 메모장</p>
         </header>
 
-        <!-- 오늘 할 일 목록 (새로운 섹션) -->
-        <div id="today-tasks-container" class="bg-white rounded-xl shadow-lg p-4 mb-8">
-            <h3 class="text-lg font-bold text-gray-800 mb-2">오늘의 할 일</h3>
-            <ul id="today-tasks-list" class="space-y-2">
-                <!-- 오늘 할 일 메모가 여기에 동적으로 추가됩니다 -->
-            </ul>
-        </div>
-
         <main class="md:flex gap-8">
-            <!-- 카테고리 관리 섹션 (좌측) -->
-            <div class="w-full md:w-1/4 bg-white rounded-xl shadow-lg p-6 mb-8 md:mb-0 h-fit md:sticky md:top-8">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">카테고리</h3>
-                <div class="flex space-x-2 mb-4">
-                    <input type="text" id="category-input" class="w-full p-2 border border-gray-200 rounded-lg text-sm" placeholder="새 카테고리명">
-                    <button id="add-category-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">추가</button>
+            <!-- 좌측 사이드바 (오늘의 할 일 및 카테고리) -->
+            <div class="w-full md:w-1/4 mb-8 md:mb-0 h-fit md:sticky md:top-8 space-y-4">
+                <!-- 오늘의 할 일 목록 -->
+                <div id="today-tasks-container" class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">오늘의 할 일</h3>
+                    <ul id="today-tasks-list" class="space-y-2">
+                        <!-- 오늘 할 일 메모가 여기에 동적으로 추가됩니다 -->
+                    </ul>
                 </div>
-                <ul id="category-list" class="space-y-2">
-                    <!-- 카테고리 목록이 여기에 동적으로 추가됩니다 -->
-                </ul>
+                <!-- 카테고리 관리 섹션 -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">카테고리</h3>
+                    <div class="flex space-x-2 mb-4">
+                        <input type="text" id="category-input" class="w-full p-2 border border-gray-200 rounded-lg text-sm" placeholder="새 카테고리명">
+                        <button id="add-category-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">추가</button>
+                    </div>
+                    <ul id="category-list" class="space-y-2">
+                        <!-- 카테고리 목록이 여기에 동적으로 추가됩니다 -->
+                    </ul>
+                </div>
             </div>
 
             <!-- 메모 입력 및 목록 섹션 (우측) -->
@@ -88,8 +90,26 @@
             </div>
         </div>
     </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    <script>
+        // Firebase 설정 (환경 변수 사용)
+        setLogLevel('Debug');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let userId = null;
+        let selectedCategory = localStorage.getItem('selectedCategory') || '오늘 할 일';
+        let noteToDeleteId = null;
+
         document.addEventListener('DOMContentLoaded', () => {
             const noteInput = document.getElementById('note-input');
             const addNoteBtn = document.getElementById('add-note-btn');
@@ -102,22 +122,57 @@
             const categoryList = document.getElementById('category-list');
             const todayTasksList = document.getElementById('today-tasks-list');
 
-            let notes = JSON.parse(localStorage.getItem('notes')) || [];
-            let categories = JSON.parse(localStorage.getItem('categories')) || ['전체'];
-            // '오늘 할 일' 카테고리가 없으면 추가하고 맨 앞으로 이동
-            if (!categories.includes('오늘 할 일')) {
-                const todayIndex = categories.indexOf('오늘 할 일');
-                if (todayIndex > -1) {
-                    categories.splice(todayIndex, 1);
+            const notesCollection = collection(db, `/artifacts/${appId}/users/${userId}/notes`);
+            const categoriesCollection = collection(db, `/artifacts/${appId}/users/${userId}/categories`);
+            
+            // 로그인 처리
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    console.log("User is authenticated:", userId);
+                    initializeDataListeners();
+                } else {
+                    console.log("No user, signing in anonymously...");
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (error) {
+                        console.error("Authentication failed:", error);
+                    }
                 }
-                categories.unshift('오늘 할 일');
-                localStorage.setItem('categories', JSON.stringify(categories));
-            }
-            let selectedCategory = localStorage.getItem('selectedCategory') || '오늘 할 일';
-            let noteToDeleteId = null;
+            });
+
+            const initializeDataListeners = () => {
+                // Notes 리스너
+                const qNotes = query(collection(db, `/artifacts/${appId}/users/${userId}/notes`));
+                onSnapshot(qNotes, (querySnapshot) => {
+                    const notes = [];
+                    querySnapshot.forEach((doc) => {
+                        notes.push({ id: doc.id, ...doc.data() });
+                    });
+                    renderNotes(notes);
+                    renderTodayTasks(notes);
+                });
+
+                // Categories 리스너
+                const qCategories = query(collection(db, `/artifacts/${appId}/users/${userId}/categories`));
+                onSnapshot(qCategories, (querySnapshot) => {
+                    let categories = ['전체'];
+                    querySnapshot.forEach((doc) => {
+                        categories.push(doc.data().name);
+                    });
+                    if (!categories.includes('오늘 할 일')) {
+                        categories.unshift('오늘 할 일');
+                    }
+                    renderCategories(categories);
+                });
+            };
 
             // '오늘 할 일' 메모 렌더링 함수
-            const renderTodayTasks = () => {
+            const renderTodayTasks = (notes) => {
                 todayTasksList.innerHTML = '';
                 const todayNotes = notes.filter(note => note.category === '오늘 할 일');
                 
@@ -137,7 +192,7 @@
             };
 
             // 카테고리 렌더링 함수
-            const renderCategories = () => {
+            const renderCategories = (categories) => {
                 categoryList.innerHTML = '';
                 categories.forEach(category => {
                     const categoryItem = document.createElement('li');
@@ -152,23 +207,21 @@
                     item.addEventListener('click', (e) => {
                         selectedCategory = e.target.dataset.category;
                         localStorage.setItem('selectedCategory', selectedCategory);
-                        renderCategories();
-                        renderNotes();
+                        renderCategories(categories);
                     });
                 });
             };
 
             // 메모 렌더링 함수
-            const renderNotes = () => {
+            const renderNotes = (notes) => {
                 notesContainer.innerHTML = '';
-                // 선택된 카테고리에 따라 메모 필터링
                 const filteredNotes = selectedCategory === '전체' 
                     ? notes 
                     : notes.filter(note => note.category === selectedCategory);
 
                 if (filteredNotes.length === 0) {
                     const emptyMessage = document.createElement('div');
-                    emptyMessage.className = 'col-span-1 md:col-span-2 lg:col-span-3 text-center text-gray-400 mt-8';
+                    emptyMessage.className = 'col-span-1 sm:col-span-2 lg:col-span-3 text-center text-gray-400 mt-8';
                     emptyMessage.textContent = selectedCategory === '전체' ? '아직 작성된 메모가 없습니다.' : `"${selectedCategory}" 카테고리에 메모가 없습니다.`;
                     notesContainer.appendChild(emptyMessage);
                     return;
@@ -201,42 +254,47 @@
             };
 
             // 메모 추가 버튼 클릭 이벤트
-            addNoteBtn.addEventListener('click', () => {
+            addNoteBtn.addEventListener('click', async () => {
                 const content = noteInput.value.trim();
-                if (content) {
-                    const newNote = {
-                        id: Date.now(),
-                        content: content,
-                        category: selectedCategory // 현재 선택된 카테고리 할당
-                    };
-                    notes.unshift(newNote);
-                    localStorage.setItem('notes', JSON.stringify(notes));
-                    noteInput.value = '';
-                    renderNotes();
-                    renderTodayTasks(); // '오늘 할 일' 목록 업데이트
+                if (content && userId) {
+                    try {
+                        await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/notes`), {
+                            content: content,
+                            category: selectedCategory,
+                            createdAt: new Date()
+                        });
+                        noteInput.value = '';
+                    } catch (e) {
+                        console.error("Error adding document: ", e);
+                    }
                 }
             });
 
             // 카테고리 추가 버튼 클릭 이벤트
-            addCategoryBtn.addEventListener('click', () => {
+            addCategoryBtn.addEventListener('click', async () => {
                 const categoryName = categoryInput.value.trim();
-                if (categoryName && !categories.includes(categoryName)) {
-                    categories.push(categoryName);
-                    localStorage.setItem('categories', JSON.stringify(categories));
-                    categoryInput.value = '';
-                    renderCategories();
+                if (categoryName && userId) {
+                    try {
+                        await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/categories`), {
+                            name: categoryName
+                        });
+                        categoryInput.value = '';
+                    } catch (e) {
+                        console.error("Error adding category: ", e);
+                    }
                 }
             });
 
             // 삭제 모달 확인 버튼 이벤트
-            confirmDeleteBtn.addEventListener('click', () => {
-                if (noteToDeleteId !== null) {
-                    notes = notes.filter(note => note.id !== noteToDeleteId);
-                    localStorage.setItem('notes', JSON.stringify(notes));
-                    noteToDeleteId = null;
-                    deleteModal.classList.add('hidden');
-                    renderNotes();
-                    renderTodayTasks(); // '오늘 할 일' 목록 업데이트
+            confirmDeleteBtn.addEventListener('click', async () => {
+                if (noteToDeleteId !== null && userId) {
+                    try {
+                        await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/notes`, noteToDeleteId));
+                        noteToDeleteId = null;
+                        deleteModal.classList.add('hidden');
+                    } catch (e) {
+                        console.error("Error deleting document: ", e);
+                    }
                 }
             });
 
@@ -245,11 +303,6 @@
                 noteToDeleteId = null;
                 deleteModal.classList.add('hidden');
             });
-
-            // 초기 렌더링
-            renderCategories();
-            renderNotes();
-            renderTodayTasks();
         });
     </script>
 </body>
