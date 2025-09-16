@@ -31,6 +31,21 @@
             background-color: #e2e8f0;
             font-weight: 700;
         }
+        .message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            border-radius: 9999px;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 1000;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8">
@@ -93,7 +108,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, doc, deleteDoc, setDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
         // Firebase 설정 (환경 변수 사용)
@@ -109,6 +124,23 @@
         let userId = null;
         let selectedCategory = localStorage.getItem('selectedCategory') || '오늘 할 일';
         let noteToDeleteId = null;
+
+        // 메시지 박스 함수
+        const showMessage = (message, type = 'info') => {
+            const messageBox = document.createElement('div');
+            messageBox.className = `message-box ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            messageBox.textContent = message;
+            document.body.appendChild(messageBox);
+
+            setTimeout(() => {
+                messageBox.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+                messageBox.addEventListener('transitionend', () => messageBox.remove(), { once: true });
+            }, 3000);
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             const noteInput = document.getElementById('note-input');
@@ -139,6 +171,7 @@
                         }
                     } catch (error) {
                         console.error("Authentication failed:", error);
+                        showMessage("로그인에 실패했습니다.", 'error');
                     }
                 }
             });
@@ -195,8 +228,15 @@
                 categoryList.innerHTML = '';
                 categories.forEach(category => {
                     const categoryItem = document.createElement('li');
-                    categoryItem.className = `category-item p-2 rounded-lg cursor-pointer hover:bg-gray-200 ${selectedCategory === category ? 'selected' : ''}`;
-                    categoryItem.textContent = category;
+                    categoryItem.className = `category-item p-2 rounded-lg cursor-pointer hover:bg-gray-200 flex justify-between items-center ${selectedCategory === category ? 'selected' : ''}`;
+                    categoryItem.innerHTML = `
+                        <span>${category}</span>
+                        ${category !== '전체' && category !== '오늘 할 일' ? `<button class="delete-category-btn text-gray-400 hover:text-red-500" data-category="${category}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </button>` : ''}
+                    `;
                     categoryItem.dataset.category = category;
                     categoryList.appendChild(categoryItem);
                 });
@@ -204,9 +244,35 @@
                 // 카테고리 클릭 이벤트 리스너
                 document.querySelectorAll('.category-item').forEach(item => {
                     item.addEventListener('click', (e) => {
-                        selectedCategory = e.target.dataset.category;
+                        selectedCategory = e.currentTarget.dataset.category;
                         localStorage.setItem('selectedCategory', selectedCategory);
                         renderCategories(categories);
+                    });
+                });
+                
+                // 카테고리 삭제 버튼 이벤트 리스너
+                document.querySelectorAll('.delete-category-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const categoryToDelete = e.currentTarget.dataset.category;
+                        const confirmed = confirm(`'${categoryToDelete}' 카테고리를 삭제하시겠습니까? 이 카테고리의 모든 메모도 삭제됩니다.`);
+                        if (confirmed) {
+                            try {
+                                const notesQuery = query(collection(db, `/artifacts/${appId}/users/${userId}/notes`), where("category", "==", categoryToDelete));
+                                const querySnapshot = await getDocs(notesQuery);
+                                const batch = writeBatch(db);
+                                querySnapshot.forEach((doc) => {
+                                    batch.delete(doc.ref);
+                                });
+                                await batch.commit();
+
+                                await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/categories`, categoryToDelete));
+                                showMessage(`'${categoryToDelete}' 카테고리가 삭제되었습니다.`, 'info');
+                            } catch (e) {
+                                console.error("카테고리 삭제 중 오류 발생:", e);
+                                showMessage("카테고리 삭제 실패", 'error');
+                            }
+                        }
                     });
                 });
             };
@@ -214,8 +280,8 @@
             // 메모 렌더링 함수
             const renderNotes = (notes) => {
                 notesContainer.innerHTML = '';
-                const filteredNotes = selectedCategory === '전체' 
-                    ? notes 
+                const filteredNotes = selectedCategory === '전체'
+                    ? notes
                     : notes.filter(note => note.category === selectedCategory);
 
                 if (filteredNotes.length === 0) {
@@ -263,8 +329,10 @@
                             createdAt: new Date()
                         });
                         noteInput.value = '';
+                        showMessage('메모가 추가되었습니다.', 'info');
                     } catch (e) {
                         console.error("Error adding document: ", e);
+                        showMessage('메모 추가 실패', 'error');
                     }
                 }
             });
@@ -274,12 +342,16 @@
                 const categoryName = categoryInput.value.trim();
                 if (categoryName && userId) {
                     try {
-                        await addDoc(collection(db, `/artifacts/${appId}/users/${userId}/categories`), {
+                        // categoryName을 문서 ID로 사용하여 중복을 방지
+                        const categoryDocRef = doc(db, `/artifacts/${appId}/users/${userId}/categories`, categoryName);
+                        await setDoc(categoryDocRef, {
                             name: categoryName
                         });
                         categoryInput.value = '';
+                        showMessage(`'${categoryName}' 카테고리가 추가되었습니다.`, 'info');
                     } catch (e) {
                         console.error("Error adding category: ", e);
+                        showMessage('카테고리 추가 실패', 'error');
                     }
                 }
             });
@@ -291,8 +363,10 @@
                         await deleteDoc(doc(db, `/artifacts/${appId}/users/${userId}/notes`, noteToDeleteId));
                         noteToDeleteId = null;
                         deleteModal.classList.add('hidden');
+                        showMessage('메모가 삭제되었습니다.', 'info');
                     } catch (e) {
                         console.error("Error deleting document: ", e);
+                        showMessage('메모 삭제 실패', 'error');
                     }
                 }
             });
